@@ -1,0 +1,66 @@
+---
+services:
+  db:
+    image: postgres:${POSTGRES_IMAGE_TAG:-17}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # mount db creation script in place for bootstrap
+      - ./config/db:/docker-entrypoint-initdb.d
+    networks:
+      - internal
+
+  fhir:
+    image: hapiproject/hapi:${FHIR_IMAGE_TAG:-v8.0.0}
+    environment:
+      spring.datasource.url: jdbc:postgresql://db:5432/hapifhir
+      spring.datasource.username: postgres
+      spring.datasource.password: postgres
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+
+      # enable all endpoints for operational data
+      management.endpoints.web.exposure.include: "*"
+
+      # enable IPS; use latest version
+      hapi.fhir.ips_enabled: "true"
+      hapi.fhir.implementationguides.ips_2_0_0.packageUrl: https://build.fhir.org/ig/HL7/fhir-ips/package.tgz
+      hapi.fhir.implementationguides.ips_2_0_0.name: hl7.fhir.uv.ips
+      hapi.fhir.implementationguides.ips_2_0_0.version: 2.0.0
+    volumes:
+      # docker image does not contain any appropriate HTTP client
+      # use busybox from host as `wget`
+      - /usr/bin/busybox:/usr/bin/wget:ro
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - --quiet
+        - http://localhost:8080/actuator/health
+      start_period: 2m
+    expose:
+      - 8080
+    depends_on:
+      - db
+    networks:
+      internal:
+        aliases:
+          - fhir-internal
+
+  fhir-smoketest:
+    build: .
+    depends_on:
+      fhir:
+        condition: service_healthy
+        restart: true
+    environment:
+      FHIR_BASE_URL: http://fhir-internal:8080/fhir
+    networks:
+      - internal
+
+networks:
+  # internal network for backing services
+  internal:

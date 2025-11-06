@@ -1,0 +1,2 @@
+---- HAPI ----
+create database hapifhir;

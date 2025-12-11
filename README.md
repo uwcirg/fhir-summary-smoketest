@@ -1,5 +1,5 @@
 # fhir-summary-smoketest
-Simple service to address HAPI FHIR $summary operation delay on fresh start
+Simple docker service to be run alongside HAPI FHIR server. Addresses $summary operation delay on fresh start.
 ```
 docker compose up -d --build --pull always
 ```
